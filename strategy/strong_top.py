@@ -474,3 +474,97 @@ if __name__ == "__main__":
     print(f"信号详情: {result['top_signals']}")
     print(f"原因: {result['reason']}")
     print("=" * 50)
+    # ============================================================
+# 第七部分：bigApush 适配器
+# ============================================================
+
+class StrongTopStrategyAdapter:
+    """
+    StrongTopStrategy 的 bigApush 适配器
+    
+    将单只股票分析策略适配为全市场选股策略：
+    - 遍历全市场股票
+    - 对每只股票执行顶部识别
+    - 返回没有顶部信号或顶部风险较低的股票列表
+    """
+    
+    def __init__(self, config: Optional[Dict] = None):
+        self.strategy = StrongTopStrategy(config)
+    
+    def filter(self, df_dict: Dict[str, pd.DataFrame], **kwargs) -> List[str]:
+        """
+        适配 bigApush 的 filter 接口
+        
+        Args:
+            df_dict: 股票数据字典，key为股票代码，value为日线DataFrame
+            **kwargs: 额外参数，可能包含行业指数和大盘指数
+            
+        Returns:
+            通过筛选的股票代码列表（没有顶部信号的股票）
+        """
+        # 获取行业和大盘数据（从kwargs或全局配置获取）
+        industry_data = kwargs.get('industry_data')
+        benchmark_data = kwargs.get('benchmark_data')
+        
+        passed_stocks = []
+        
+        for code, df in df_dict.items():
+            try:
+                # 如果数据不足，跳过
+                if len(df) < 60:
+                    continue
+                
+                # 简化版：只用个股数据快速判断
+                # 如果传入了行业和大盘数据，使用完整版
+                if industry_data is not None and benchmark_data is not None:
+                    # 获取该股票对应的行业数据（需要映射关系）
+                    # 这里简化：使用全局行业数据
+                    result = self.strategy.make_decision(
+                        df, 
+                        industry_data, 
+                        benchmark_data
+                    )
+                else:
+                    # 简化版：仅检测顶部信号
+                    result = self._quick_check(df)
+                
+                # 如果操作建议不是"卖出"或"大幅减仓"，认为该股票安全
+                if result['action_code'] < 2:  # 0:持有, 1:减仓观察, 2:卖出
+                    passed_stocks.append(code)
+                    
+            except Exception as e:
+                # 单只股票出错不影响整体扫描
+                print(f"分析 {code} 时出错: {e}")
+                continue
+        
+        return passed_stocks
+    
+    def _quick_check(self, df: pd.DataFrame) -> Dict:
+        """简化版快速检查，仅用个股数据"""
+        # 计算关键指标
+        close = df['close']
+        volume = df['volume']
+        
+        # RSI
+        rsi = self.strategy.calc_rsi(df)
+        rsi_overbought = rsi.iloc[-1] > 75
+        
+        # KDJ
+        k, d, j = self.strategy.calc_kdj(df)
+        kdj_overbought = k.iloc[-1] > 80 and j.iloc[-1] > 100
+        
+        # 放量滞涨
+        avg_vol_5 = volume.rolling(5).mean()
+        pct_change = (close.iloc[-1] - close.iloc[-2]) / close.iloc[-2]
+        volume_surge = (
+            volume.iloc[-1] >= 1.8 * avg_vol_5.iloc[-1] and 
+            -0.005 <= pct_change <= 0.015
+        )
+        
+        triggered = sum([rsi_overbought, kdj_overbought, volume_surge])
+        
+        return {
+            'action_code': 2 if triggered >= 2 else 1 if triggered == 1 else 0,
+            'action': '卖出' if triggered >= 2 else '减仓观察' if triggered == 1 else '持有',
+            'triggered_count': triggered
+        }
