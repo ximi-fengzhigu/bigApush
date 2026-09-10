@@ -5,7 +5,7 @@ Strong Stock Top Detection Strategy
 
 import pandas as pd
 import numpy as np
-from typing import Dict, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 class StrongTopStrategy:
