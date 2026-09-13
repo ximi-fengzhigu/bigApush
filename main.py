@@ -34,7 +34,6 @@ __version__ = "1.0.0"
 from utils.akshare_fetcher import AKShareFetcher
 from utils.db_manager import DBManager
 from strategy.strategy_registry import get_registry
-from utils.kline_chart import generate_kline_chart
 from utils.db_initializer import init_databases_if_needed
 from utils.stock_filter import StockFilter
 import yaml
