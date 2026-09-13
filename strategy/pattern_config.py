@@ -15,14 +15,23 @@ from pathlib import Path
 
 def _load_yaml_config():
     """从YAML配置文件加载B1PatternMatch配置"""
-    config_path = Path("/root/quant-csv/config/strategy_params.yaml")
-    
-    if not config_path.exists():
+    # 方式一：基于当前文件位置推导项目根目录
+    # 本文件在 strategy/pattern_config.py，根目录是上一级
+    project_root = Path(__file__).resolve().parent.parent
+    config_path = project_root / "config" / "strategy_params.yaml"
+
+    # 方式二（可选）：支持环境变量覆盖，方便本地/CI 灵活指定
+    env_path = os.getenv("STRATEGY_PARAMS_PATH")
+    if env_path:
+        config_path = Path(env_path)
+
+    # 用 is_file() 而不是 exists()，避免无权限时抛异常
+    if not config_path.is_file():
         return {}
-    
+
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
+            config = yaml.safe_load(f) or {}
         return config.get('B1PatternMatch', {})
     except Exception as e:
         print(f"⚠️ 加载B1PatternMatch配置失败: {e}，使用默认值")
