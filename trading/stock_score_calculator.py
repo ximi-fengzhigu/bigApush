@@ -27,6 +27,8 @@ from trading.moneyflow_scorer import MoneyflowScorer
 from trading.fundamental_scorer import FundamentalScorer
 from trading.sector_scorer import SectorScorer
 from trading.event_scorer import EventScorer
+from utils.volume_price import analyze as analyze_volume_price
+from utils.sector_analyzer import make_provider, analyze_sector
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
@@ -63,8 +65,10 @@ class StockScoreCalculator:
         self.sector_scorer = SectorScorer(tushare_token=tushare_token, db_manager=db_manager)
         # 初始化事件驱动评分器（依赖 Tushare）
         self.event_scorer = EventScorer(tushare_token=tushare_token)
+        # 初始化板块数据源（用于量价分析）
+        self.sector_provider = make_provider()
         # 记录初始化完成日志
-        logger.info("评分计算引擎初始化完成，五个维度评分器已就绪")
+        logger.info("评分计算引擎初始化完成，六个维度评分器已就绪")
 
     def calculate_score(self, stock_code, score_date: str):
         """
@@ -151,6 +155,8 @@ class StockScoreCalculator:
         sector_score, sector_detail = self._safe_calculate(
             "板块强度", self.sector_scorer, stock_code, score_date
         )
+        # 计算量价分析得分
+        volume_score = self._calculate_volume_score(stock_code, score_date)
         # 计算事件驱动得分
         event_score, event_detail = self._safe_calculate(
             "事件驱动", self.event_scorer, stock_code, score_date
@@ -168,6 +174,8 @@ class StockScoreCalculator:
         score_obj.fundamental_score = fund_score
         # 设置板块强度得分
         score_obj.sector_score = sector_score
+        # 设置量价分析得分
+        score_obj.volume_score = volume_score
         # 设置事件驱动得分
         score_obj.event_score = event_score
 
@@ -191,6 +199,11 @@ class StockScoreCalculator:
         score_obj.sector_detail = (
             sector_detail.to_dict() if hasattr(sector_detail, "to_dict") else {}
         )
+        # 设置量价分析详情
+        score_obj.volume_detail = {
+            "pattern": "放量上涨" if volume_score > 0 else ("缩量回调" if volume_score > 0 else "中性"),
+            "score_delta": volume_score,
+        }
         # 设置事件驱动详情
         score_obj.event_detail = (
             event_detail.to_dict() if hasattr(event_detail, "to_dict") else {}
@@ -203,7 +216,7 @@ class StockScoreCalculator:
         # 收集所有维度的否决信息
         veto_triggered, veto_reason = self._check_all_vetos(
             tech_detail, money_detail, fund_detail,
-            sector_detail, event_detail
+            sector_detail, volume_score, event_detail
         )
 
         # 如果触发一票否决
@@ -234,7 +247,7 @@ class StockScoreCalculator:
             f"总分={score_obj.total_score}, 等级={score_obj.score_level}, "
             f"技术面={tech_score}, 资金面={money_score}, "
             f"基本面={fund_score}, 板块={sector_score}, "
-            f"事件={event_score}"
+            f"量价={volume_score}, 事件={event_score}"
         )
         return score_obj
 
@@ -337,9 +350,57 @@ class StockScoreCalculator:
             # 返回 0 分和一个空的 mock 详情对象
             return 0, _EmptyDetail()
 
+    def _calculate_volume_score(self, stock_code: str, score_date: str) -> float:
+        """
+        计算量价分析得分
+        
+        参数:
+            stock_code: 股票代码
+            score_date: 评分日期
+        
+        返回:
+            float: 量价分析得分（-10 ~ +10）
+        """
+        try:
+            from utils.db_manager import DBManager
+            db = DBManager()
+            
+            # 获取最新行情数据
+            cursor = db.execute(
+                """
+                SELECT volume, volume_ma5, change_pct 
+                FROM stock_quotes 
+                WHERE code = ? 
+                ORDER BY date DESC 
+                LIMIT 1
+                """,
+                (stock_code,)
+            )
+            row = cursor.fetchone()
+            
+            if not row or row[0] is None or row[1] is None:
+                logger.debug(f"股票 {stock_code} 无行情数据，量价得分为0")
+                return 0.0
+            
+            # 构造 df_row 给 analyze_volume_price
+            df_row = {
+                'volume': row[0],
+                'volume_ma5': row[1],
+                'change_pct': row[2] if row[2] else 0.0,
+            }
+            
+            # 调用量价分析
+            result = analyze_volume_price(df_row)
+            logger.debug(f"股票 {stock_code} 量价分析: {result.pattern}, delta={result.score_delta}")
+            return float(result.score_delta)
+            
+        except Exception as e:
+            logger.error(f"股票 {stock_code} 量价分析失败: {e}")
+            return 0.0
+    
     def _check_all_vetos(
         self, tech_detail, money_detail, fund_detail,
-        sector_detail, event_detail
+        sector_detail, volume_score, event_detail
     ) -> Tuple[bool, str]:
         """
         检查所有维度的一票否决条件
@@ -362,6 +423,7 @@ class StockScoreCalculator:
             ("资金面", money_detail),
             ("基本面", fund_detail),
             ("板块强度", sector_detail),
+            ("量价分析", type('obj', (object,), {'veto': False, 'veto_reason': ''})()),
             ("事件驱动", event_detail),
         ]
 

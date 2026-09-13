@@ -22,11 +22,12 @@ from typing import List, Optional
 
 # 各维度权重配置
 SCORE_WEIGHTS = {
-    "technical": 0.35,    # 技术面权重 35%
-    "moneyflow": 0.35,    # 资金面权重 35%
+    "technical": 0.30,    # 技术面权重 30%
+    "moneyflow": 0.25,    # 资金面权重 25%
     "fundamental": 0.10,  # 基本面权重 10%
     "sector": 0.10,       # 板块强度权重 10%
-    "event": 0.10,        # 事件驱动权重 10%
+    "volume": 0.10,       # 量价分析权重 10%
+    "event": 0.15,        # 事件驱动权重 15%
 }
 
 # 一票否决时的固定得分
@@ -580,6 +581,8 @@ class StockScore:
         self.fundamental_score: float = 0
         # 板块强度得分（-100 ~ +200）
         self.sector_score: float = 0
+        # 量价分析得分（-10 ~ +10）
+        self.volume_score: float = 0
         # 事件驱动得分（-100 ~ +100）
         self.event_score: float = 0
 
@@ -598,6 +601,7 @@ class StockScore:
         self.moneyflow_detail: dict = {}
         self.fundamental_detail: dict = {}
         self.sector_detail: dict = {}
+        self.volume_detail: dict = {}
         self.event_detail: dict = {}
 
     def calculate_total_score(self) -> float:
@@ -626,6 +630,7 @@ class StockScore:
             + self.moneyflow_score * SCORE_WEIGHTS["moneyflow"]
             + self.fundamental_score * SCORE_WEIGHTS["fundamental"]
             + self.sector_score * SCORE_WEIGHTS["sector"]
+            + self.volume_score * SCORE_WEIGHTS["volume"]
             + self.event_score * SCORE_WEIGHTS["event"]
         )
 
