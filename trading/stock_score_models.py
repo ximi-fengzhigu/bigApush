@@ -735,6 +735,16 @@ class StockScore:
                     # 板块详情
                     **self.sector_detail,
                 },
+                "volume": {
+                    "score": self.volume_score,
+                    "weight": SCORE_WEIGHTS["volume"],
+                    # 加权得分
+                    "weighted_score": round(
+                        self.volume_score * SCORE_WEIGHTS["volume"], 2
+                    ),
+                    # 量价详情
+                    **self.volume_detail,
+                },
                 "event": {
                     "score": self.event_score,
                     "weight": SCORE_WEIGHTS["event"],
