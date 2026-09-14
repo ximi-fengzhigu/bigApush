@@ -786,10 +786,26 @@ B1完美图形匹配:
                                 name = s.get('name', '')
                                 code = s.get('code', '')
                                 sig = s.get('signals', [])
+                                total_score = s.get('total_score', 0)
+                                score_level = s.get('score_level', '')
+                                volume_pattern = s.get('volume_pattern', '')
+                                sector_info = s.get('sector_info', '')
+                                
+                                # 构建详情字符串
+                                detail_parts = []
                                 if sig:
-                                    lines.append(f"  {code} {name} 价格:{sig[0].get('close','-')}")
-                                else:
-                                    lines.append(f"  {code} {name}")
+                                    detail_parts.append(f"价格:{sig[0].get('close','-')}")
+                                if total_score > 0:
+                                    detail_parts.append(f"总分:{total_score:.1f}")
+                                if score_level:
+                                    detail_parts.append(f"等级:{score_level}")
+                                if volume_pattern and volume_pattern != '中性':
+                                    detail_parts.append(f"量价:{volume_pattern}")
+                                if sector_info and sector_info != '其他':
+                                    detail_parts.append(f"板块:{sector_info}")
+                                
+                                detail = " ".join(detail_parts)
+                                lines.append(f"  {code} {name} {detail}")
                                 all_stocks.append({'code': code, 'name': name})
                             lines.append("")
                             total += len(signals)
