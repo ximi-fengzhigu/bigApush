@@ -345,15 +345,13 @@ class QuantSystem:
         return results, stock_names
     
     def run_full(self, category='all', max_stocks=None):
-        """完整流程：更新 + 选股
-        :param max_stocks: 限制处理的股票数量（用于快速测试）
-        """
+        """完整流程：更新 + 选股 + 综合评分"""
         from datetime import datetime
         import json
         from pathlib import Path
 
         print("=" * 60)
-        print("🚀 执行完整流程")
+        print("🚀 执行完整流程（技术+量价+板块三维评分）")
         if max_stocks:
             print(f"   快速测试模式：只处理前 {max_stocks} 只股票")
         print("=" * 60)
@@ -362,9 +360,36 @@ class QuantSystem:
         self._smart_update(max_stocks=max_stocks)
 
         # 2. 选股（返回数据和结果）
-        results, stock_names, stock_data_dict = self.select_stocks(category=category, max_stocks=max_stocks, return_data=True)
+        results, stock_names, stock_data_dict = self.select_stocks(
+            category=category, max_stocks=max_stocks, return_data=True
+        )
 
-        return results
+        # 3. 调用综合评分引擎（技术+资金+基本面+板块+量价+事件）
+        from trading.stock_score_api import get_stock_score_calculator
+        calculator = get_stock_score_calculator(db_manager=self.db_manager)
+
+        # 计算所有选中股票的综分
+        scored_results = {}
+        for strategy_name, signals in results.items():
+            scored_signals = []
+            for signal in signals:
+                code = signal.get('code', '')
+                try:
+                    score_date = datetime.now().strftime('%Y-%m-%d')
+                    score_obj = calculator.calculate_score(code, score_date)
+                    # 添加评分信息到信号
+                    signal['total_score'] = score_obj.total_score
+                    signal['score_level'] = score_obj.score_level
+                    signal['volume_score'] = score_obj.volume_score
+                    signal['volume_pattern'] = score_obj.volume_detail.get('pattern', '中性')
+                    signal['sector_info'] = score_obj.sector_detail.get('sector_name', '其他')
+                    scored_signals.append(signal)
+                except Exception as e:
+                    print(f"  ⚠️ 评分失败 {code}: {e}")
+                    scored_signals.append(signal)
+            scored_results[strategy_name] = scored_signals
+
+        return scored_results
     
     def select_with_b1_match(self, category='all', max_stocks=None, min_similarity=None, lookback_days=None):
         """
