@@ -364,6 +364,22 @@ class QuantSystem:
             category=category, max_stocks=max_stocks, return_data=True
         )
 
+        # 2.5 保存选股记录到数据库（供评分器读取策略命中）
+        from utils.selection_record_manager import SelectionRecordManager
+        srm = SelectionRecordManager()
+        all_signals = []
+        for strategy_name, signals in results.items():
+            for signal in signals:
+                signal['strategies'] = [strategy_name]
+                all_signals.append(signal)
+        if all_signals:
+            save_result = srm.save_selection_result(
+                strategy_names=list(results.keys()),
+                signals=all_signals,
+                selection_time=datetime.now()
+            )
+            print(f"\n📝 选股记录保存: {save_result}")
+
         # 3. 调用综合评分引擎（技术+资金+基本面+板块+量价+事件）
         from trading.stock_score_calculator import StockScoreCalculator
         calculator = StockScoreCalculator(db_manager=self.db_manager)
