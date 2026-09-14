@@ -365,8 +365,8 @@ class QuantSystem:
         )
 
         # 3. 调用综合评分引擎（技术+资金+基本面+板块+量价+事件）
-        from trading.stock_score_api import get_stock_score_calculator
-        calculator = get_stock_score_calculator(db_manager=self.db_manager)
+        from trading.stock_score_calculator import StockScoreCalculator
+        calculator = StockScoreCalculator(db_manager=self.db_manager)
 
         # 计算所有选中股票的综分
         scored_results = {}
