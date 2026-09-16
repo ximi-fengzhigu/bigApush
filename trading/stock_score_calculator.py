@@ -365,28 +365,40 @@ class StockScoreCalculator:
             from utils.db_manager import DBManager
             db = DBManager()
             
-            # 获取最新行情数据
+            # 获取最新K线数据（包含最近6天用于计算volume_ma5）
             cursor = db.execute(
                 """
-                SELECT volume, volume_ma5, change_pct 
-                FROM stock_quotes 
+                SELECT volume, close, prev_close
+                FROM stock_kline 
                 WHERE code = ? 
                 ORDER BY date DESC 
-                LIMIT 1
+                LIMIT 6
                 """,
                 (stock_code,)
             )
-            row = cursor.fetchone()
+            rows = cursor.fetchall()
             
-            if not row or row[0] is None or row[1] is None:
-                logger.debug(f"股票 {stock_code} 无行情数据，量价得分为0")
+            if not rows or len(rows) < 2:
+                logger.debug(f"股票 {stock_code} 无K线数据，量价得分为0")
+                return 0.0
+            
+            # 计算volume_ma5（最近5天的成交量均值，排除当天）
+            volumes = [r[0] for r in rows[1:6] if r[0] is not None]
+            volume_ma5 = sum(volumes) / len(volumes) if volumes else None
+            latest_volume = rows[0][0] if rows[0][0] else 0
+            latest_close = rows[0][1] if rows[0][1] else 0
+            prev_close = rows[0][2] if rows[0][2] else latest_close
+            change_pct = (latest_close - prev_close) / prev_close * 100 if prev_close else 0
+            
+            if volume_ma5 is None or volume_ma5 == 0:
+                logger.debug(f"股票 {stock_code} 无有效成交量数据，量价得分为0")
                 return 0.0
             
             # 构造 df_row 给 analyze_volume_price
             df_row = {
-                'volume': row[0],
-                'volume_ma5': row[1],
-                'change_pct': row[2] if row[2] else 0.0,
+                'volume': latest_volume,
+                'volume_ma5': volume_ma5,
+                'change_pct': change_pct,
             }
             
             # 调用量价分析
