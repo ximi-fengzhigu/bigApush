@@ -365,31 +365,33 @@ class StockScoreCalculator:
             from utils.db_manager import DBManager
             db = DBManager()
             
-            # 获取最新K线数据（包含最近6天用于计算volume_ma5）
+            # 获取最新K线数据（包含最近6天用于计算volume_ma5和change_pct）
             cursor = db.execute(
                 """
-                SELECT volume, close, prev_close
-                FROM stock_kline 
-                WHERE code = ? 
-                ORDER BY date DESC 
+                SELECT volume, close, date
+                FROM stock_kline
+                WHERE code = ?
+                ORDER BY date DESC
                 LIMIT 6
                 """,
                 (stock_code,)
             )
             rows = cursor.fetchall()
-            
+
             if not rows or len(rows) < 2:
                 logger.debug(f"股票 {stock_code} 无K线数据，量价得分为0")
                 return 0.0
-            
+
             # 计算volume_ma5（最近5天的成交量均值，排除当天）
             volumes = [r[0] for r in rows[1:6] if r[0] is not None]
             volume_ma5 = sum(volumes) / len(volumes) if volumes else None
+
             latest_volume = rows[0][0] if rows[0][0] else 0
             latest_close = rows[0][1] if rows[0][1] else 0
-            prev_close = rows[0][2] if rows[0][2] else latest_close
+            # 用前一天的收盘价计算涨跌幅
+            prev_close = rows[1][1] if len(rows) > 1 and rows[1][1] else latest_close
             change_pct = (latest_close - prev_close) / prev_close * 100 if prev_close else 0
-            
+
             if volume_ma5 is None or volume_ma5 == 0:
                 logger.debug(f"股票 {stock_code} 无有效成交量数据，量价得分为0")
                 return 0.0
