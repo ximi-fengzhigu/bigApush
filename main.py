@@ -923,37 +923,56 @@ B1完美图形匹配:
                         lines.append("")
 
                         # 3) 全A中位指数（880009）- 市场赚钱效应
+                        # 使用Tushare获取全量A股涨跌幅数据，更可靠
                         try:
-                            _mid_changes = []
-                            for _start in range(0, 5000, 100):
-                                _batch = []
-                                for _i in range(_start, min(_start + 100, 5500)):
-                                    _code = f'sz{_i:06d}' if _i < 600000 else f'sh{_i:06d}'
-                                    _batch.append(_code)
-                                try:
-                                    _url = 'http://qt.gtimg.cn/q=' + ','.join(_batch)
-                                    _resp = _req.get(_url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
-                                    _parts = _resp.text.strip().split(';')
-                                    for _p in _parts:
-                                        if 'v_' in _p:
-                                            _vals = _p.split('~')
-                                            if len(_vals) > 32:
-                                                try:
-                                                    _mid_changes.append(float(_vals[32]))
-                                                except:
-                                                    pass
-                                except:
-                                    pass
-                            if _mid_changes:
-                                _mid_changes.sort()
-                                _mid_pct = _mid_changes[len(_mid_changes)//2]
-                                _mid_up = len([c for c in _mid_changes if c > 0])
-                                _mid_down = len(_mid_changes) - _mid_up
-                                _mid_emoji = '🔴' if _mid_pct > 0 else '🟢'
-                                lines.append(f"  {_mid_emoji} 全A中位指数(880009): {_mid_pct:.2f}% | 上涨{_mid_up}只 下跌{_mid_down}只")
-                                lines.append("")
-                        except Exception:
-                            pass
+                            import tushare as _ts
+                            _pro = _ts.pro_api()
+                            _today = datetime.now().strftime('%Y%m%d')
+                            _df = _pro.daily(trade_date=_today)
+                            if _df is not None and not _df.empty:
+                                _changes = _df['pct_chg'].dropna().tolist()
+                                if _changes:
+                                    _changes.sort()
+                                    _mid_idx = len(_changes) // 2
+                                    _mid_pct = _changes[_mid_idx]
+                                    _mid_up = len([c for c in _changes if c > 0])
+                                    _mid_down = len(_changes) - _mid_up
+                                    _mid_emoji = '🔴' if _mid_pct > 0 else '🟢'
+                                    lines.append(f"  {_mid_emoji} 全A中位指数(880009): {_mid_pct:.2f}% | 上涨{_mid_up}只 下跌{_mid_down}只")
+                                    lines.append("")
+                        except Exception as _e:
+                            # 降级方案：批量查询腾讯接口
+                            try:
+                                _mid_changes = []
+                                for _start in range(1, 6001, 100):
+                                    _batch = []
+                                    for _i in range(_start, min(_start + 100, 6001)):
+                                        _code = f'sz{_i:06d}' if _i < 600000 else f'sh{_i:06d}'
+                                        _batch.append(_code)
+                                    try:
+                                        _url = 'http://qt.gtimg.cn/q=' + ','.join(_batch)
+                                        _resp = _req.get(_url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+                                        _parts = _resp.text.strip().split(';')
+                                        for _p in _parts:
+                                            if 'v_' in _p:
+                                                _vals = _p.split('~')
+                                                if len(_vals) > 32:
+                                                    try:
+                                                        _mid_changes.append(float(_vals[32]))
+                                                    except:
+                                                        pass
+                                    except:
+                                        pass
+                                if _mid_changes:
+                                    _mid_changes.sort()
+                                    _mid_pct = _mid_changes[len(_mid_changes)//2]
+                                    _mid_up = len([c for c in _mid_changes if c > 0])
+                                    _mid_down = len(_mid_changes) - _mid_up
+                                    _mid_emoji = '🔴' if _mid_pct > 0 else '🟢'
+                                    lines.append(f"  {_mid_emoji} 全A中位指数(880009): {_mid_pct:.2f}% | 上涨{_mid_up}只 下跌{_mid_down}只")
+                                    lines.append("")
+                            except Exception:
+                                pass
 
                     # 2) 板块涨跌热力图
                     try:
