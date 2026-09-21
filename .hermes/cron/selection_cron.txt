@@ -1,0 +1,9 @@
+# bigApush 收盘选股定时任务
+# 工作日 CST 07:10 (UTC 23:10) 运行
+# 使用python3.10和完整路径
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# 工作日早上7:10运行选股
+10 7 * * 1-5 thtf cd /home/thtf/projects/bigApush && /usr/local/bin/python3.10 main.py run >> /home/thtf/projects/bigApush/logs/cron.log 2>&1
