@@ -119,6 +119,7 @@ class EastMoneyIndustrySource(HTTPDataSource):
     def __init__(self):
         # 优先级1：东方财富为主要数据源
         super().__init__("eastmoney_industry", priority=1)
+        self._failed = False  # 标记API是否已故障
     
     def fetch(self, stock_code: str = None, **kwargs) -> Optional[Dict]:
         """
@@ -131,6 +132,10 @@ class EastMoneyIndustrySource(HTTPDataSource):
             包含行业信息的字典
         """
         if not stock_code:
+            return None
+        
+        # 如果API已标记为故障，快速失败不重试
+        if self._failed:
             return None
         
         try:
@@ -156,6 +161,9 @@ class EastMoneyIndustrySource(HTTPDataSource):
         
         except Exception as e:
             logger.debug(f"东方财富获取行业信息失败 ({stock_code}): {e}")
+            # 标记API为故障，后续请求快速失败
+            self._failed = True
+            raise
         
         return None
 
@@ -168,6 +176,7 @@ class EastMoneyIndustryRankingSource(HTTPDataSource):
     def __init__(self):
         # 优先级1：东方财富行业排名
         super().__init__("eastmoney_industry_ranking", priority=1)
+        self._failed = False  # 标记API是否已故障
     
     def fetch(self, **kwargs) -> Optional[pd.DataFrame]:
         """
@@ -180,6 +189,10 @@ class EastMoneyIndustryRankingSource(HTTPDataSource):
         """
         # 查询单只股票时不返回排名
         if kwargs.get('stock_code'):
+            return None
+        
+        # 如果API已标记为故障，快速失败不重试
+        if self._failed:
             return None
         
         try:
@@ -196,7 +209,7 @@ class EastMoneyIndustryRankingSource(HTTPDataSource):
             
             # 发送请求
             resp = requests.get(
-                url, params=params, headers=EM_HEADERS, timeout=15
+                url, params=params, headers=EM_HEADERS, timeout=5
             )
             if resp.status_code != 200:
                 return None
@@ -229,6 +242,9 @@ class EastMoneyIndustryRankingSource(HTTPDataSource):
         
         except Exception as e:
             logger.debug(f"东方财富获取行业排名失败: {e}")
+            # 标记API为故障，后续请求快速失败
+            self._failed = True
+            raise
         
         return None
 
